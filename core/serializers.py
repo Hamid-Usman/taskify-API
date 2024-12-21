@@ -1,0 +1,25 @@
+from rest_framework import serializers
+from .models import Columns, Boards, Cards
+
+class ColumnSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Columns
+        fields = "__all__"
+
+
+class BoardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Boards
+        fields = '__all__'
+
+
+class CardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cards
+        fields = ['id', 'task', 'position', 'description', 'due_date', 'column']
+        read_only_fields = ['id', 'position', 'description', 'due_date']
+
+class UpdateCardSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Cards
+        fields = ['id', 'task', 'position', 'description', 'due_date', 'column']
