@@ -11,11 +11,16 @@ from .serializers import (BoardSerializer,
 from .filters import CardFilter
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework.permissions import IsAuthenticated
 
 # Create your views here.
 class BoardViewSet(ModelViewSet):
     queryset = Boards.objects.all()
     serializer_class = BoardSerializer
+    permission_classes = [IsAuthenticated]
+
+    def perform_create(self, serializer):
+        serializer.save(user=self.request.user)
 
     @action(detail=True, methods=['get'], url_path='board')
     def retrieve_with_columns_and_cards(self, request, pk=None):
@@ -43,6 +48,7 @@ class BoardViewSet(ModelViewSet):
 class ColumnViewSet(ModelViewSet):
     queryset = Columns.objects.all()
     serializer_class = ColumnSerializer
+    permission_classes = [IsAuthenticated]
 
     @action(detail=True, methods=['get'], url_path='cards')
     def get_cards(self, request, *args, **kwargs):

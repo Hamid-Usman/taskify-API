@@ -1,16 +1,18 @@
 from django.db import models
 from datetime import date
+from users.models import User
 
 
 class Boards(models.Model):
     title = models.CharField(max_length=20)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="boards")
 
     def __str__(self):
         return self.title
 
 class Columns(models.Model):
     title = models.CharField(max_length=15)
-    board = models.ForeignKey(Boards, on_delete=models.CASCADE)
+    board = models.ForeignKey(Boards, on_delete=models.CASCADE, related_name="columns")
     order = models.PositiveIntegerField(default=0)
 
     def __str__(self):
@@ -22,7 +24,7 @@ class Cards(models.Model):
     position = models.PositiveIntegerField(default=0)
     description = models.TextField(default="", blank=True)
     due_date = models.DateField(default=date.today)
-    column = models.ForeignKey(Columns, on_delete=models.CASCADE)
+    column = models.ForeignKey(Columns, on_delete=models.CASCADE, related_name="cards")
 
     def __str__(self):
         return self.task

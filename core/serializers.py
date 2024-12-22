@@ -10,7 +10,13 @@ class ColumnSerializer(serializers.ModelSerializer):
 class BoardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Boards
-        fields = '__all__'
+        fields = ['id', 'title', 'user']
+        read_only_fields = ['user']
+
+        def create(self, validated_data):
+            # Assign the authenticated user automatically
+            validated_data['user'] = self.context['request'].user
+            return super().create(validated_data)
 
 
 class CardSerializer(serializers.ModelSerializer):
