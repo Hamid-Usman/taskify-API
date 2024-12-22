@@ -34,6 +34,7 @@ CORS_ALLOWED_ORIGINS = [
 
 INSTALLED_APPS = [
     'core',
+    'users',
 
     'django.contrib.admin',
     'django.contrib.auth',
@@ -44,8 +45,11 @@ INSTALLED_APPS = [
 
     'rest_framework',
     'djoser',
+    'rest_framework.authtoken',
     'corsheaders',
 ]
+
+AUTH_USER_MODEL = 'users.User'
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -90,7 +94,18 @@ DATABASES = {
     }
 }
 
-
+DJOSER = {
+    'SERIALIZERS': {
+        'user_create': 'users.serializers.UserCreateSerializer',
+        'user': 'djoser.serializers.UserSerializer',
+        'current_user': 'djoser.serializers.UserSerializer',
+    },
+    'USER_CREATE_PASSWORD_RETYPE': True,
+    'USERNAME_FIELD': 'email',
+    'USER_ID_FIELD': 'id',
+    'LOGIN_FIELD': 'email',
+    'SEND_ACTIVATION_EMAIL': False,
+}
 # Password validation
 # https://docs.djangoproject.com/en/5.0/ref/settings/#auth-password-validators
 
