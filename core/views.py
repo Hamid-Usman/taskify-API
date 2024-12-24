@@ -1,48 +1,38 @@
-from functools import partial
-
-from django.shortcuts import render
+from django.shortcuts import get_object_or_404
 from .models import Boards, Columns, Cards
 from rest_framework.viewsets import ModelViewSet
-from django_filters import rest_framework as filters
-from .serializers import (BoardSerializer,
-                          ColumnSerializer,
-                          CardSerializer,
-                          UpdateCardSerializer)
-from .filters import CardFilter
 from rest_framework.response import Response
 from rest_framework.decorators import action
+from rest_framework import status
+from django.db import transaction, models
 from rest_framework.permissions import IsAuthenticated
+from .serializers import BoardSerializer, ColumnSerializer, CardSerializer, UpdateCardSerializer
 
-# Create your views here.
+
 class BoardViewSet(ModelViewSet):
     queryset = Boards.objects.all()
     serializer_class = BoardSerializer
-    permission_classes = [IsAuthenticated]
 
     def perform_create(self, serializer):
         serializer.save(user=self.request.user)
 
     @action(detail=True, methods=['get'], url_path='board')
     def retrieve_with_columns_and_cards(self, request, pk=None):
-        # Retrieve the board
         board = self.get_object()
-
-        # Fetch columns for the board
         columns = Columns.objects.filter(board=board).order_by("order")
-
-        # Fetch cards for each column and structure the data
-        columns_with_cards = []
-        for column in columns:
-            cards = Cards.objects.filter(column=column).order_by("position")
-            column_data = ColumnSerializer(column).data
-            column_data["cards"] = CardSerializer(cards, many=True).data
-            columns_with_cards.append(column_data)
-
-        # Serialize the board and attach columns with cards
+        columns_with_cards = [
+            {
+                **ColumnSerializer(column).data,
+                "cards": CardSerializer(Cards.objects.filter(column=column).order_by("position"), many=True).data,
+            }
+            for column in columns
+        ]
         board_data = self.get_serializer(board).data
         board_data["columns"] = columns_with_cards
-
         return Response(board_data)
+
+    def get_queryset(self):
+        return Boards.objects.filter(user=self.request.user)
 
 
 class ColumnViewSet(ModelViewSet):
@@ -53,28 +43,48 @@ class ColumnViewSet(ModelViewSet):
     @action(detail=True, methods=['get'], url_path='cards')
     def get_cards(self, request, *args, **kwargs):
         column = self.get_object()
-        cards = Cards.objects.filter(column=column)
-        serializer = CardSerializer(cards, many=True)
+        cards = Cards.objects.filter(column=column).order_by("position")
+        return Response(CardSerializer(cards, many=True).data)
 
-        return Response(serializer.data)
 
 class CardViewSet(ModelViewSet):
     queryset = Cards.objects.all()
+    permission_classes = [IsAuthenticated]
+
     def get_serializer_class(self):
-        if self.action == 'update' or self.action == 'partial_update':
+        if self.action in ['update', 'partial_update']:
             return UpdateCardSerializer
         return CardSerializer
 
-    def perform_create(self, serializer):
-        # Save a new card when the create endpoint is hit
-        serializer.save()
-
-    @action(detail=True, methods=['patch'])
-    def patch(self, request, *args, **kwargs):
-        # Handle partial updates here
+    @action(detail=True, methods=['patch'], url_path='move')
+    def move_card(self, request, *args, **kwargs):
         instance = self.get_object()
-        serializer = UpdateCardSerializer(instance, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=400)
+        target_column_id = request.data.get('target_column_id')
+        new_position = request.data.get('new_position')
+
+        try:
+            target_column = get_object_or_404(Columns, id=target_column_id)
+            if not isinstance(new_position, int):
+                return Response({"error": "New position must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+
+            with transaction.atomic():
+                # Update positions in the current column
+                Cards.objects.filter(
+                    column=instance.column,
+                    position__gt=instance.position,
+                ).update(position=models.F('position') - 1)
+
+                Cards.objects.filter(
+                    column=target_column,
+                    position__gte=new_position,
+                ).update(position=models.F('position') + 1)
+
+                # Move the card
+                instance.column = target_column
+                instance.position = new_position
+                instance.save()
+
+            return Response(UpdateCardSerializer(instance).data, status=status.HTTP_200_OK)
+
+        except Exception as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
