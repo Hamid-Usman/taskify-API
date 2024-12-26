@@ -7,6 +7,8 @@ from rest_framework import status
 from django.db import transaction, models
 from rest_framework.permissions import IsAuthenticated
 from .serializers import BoardSerializer, ColumnSerializer, CardSerializer, UpdateCardSerializer
+from asgiref.sync import async_to_sync
+from channels.layers import channel_layers, get_channel_layer
 
 
 class BoardViewSet(ModelViewSet):
@@ -65,7 +67,7 @@ class CardViewSet(ModelViewSet):
         try:
             target_column = get_object_or_404(Columns, id=target_column_id)
             if not isinstance(new_position, int):
-                return Response({"error": "New position must be an integer."}, status=status.HTTP_400_BAD_REQUEST)
+                return Response({"error": "Couldn't reposition the card"}, status=status.HTTP_400_BAD_REQUEST)
 
             with transaction.atomic():
                 # Update positions in the current column
@@ -83,6 +85,21 @@ class CardViewSet(ModelViewSet):
                 instance.column = target_column
                 instance.position = new_position
                 instance.save()
+
+                channel_layers = get_channel_layer()
+                board_name = f"Board_{instance.column.board.id}"
+                async_to_sync(channel_layers.group_send) (
+                    board_name,
+                    {
+                        "type": "Board update",
+                        "message": {
+                        "card_id": instance.id,
+                        "New_position": new_position,
+                        "target_column_id": target_column_id
+                        }
+                    }
+                )
+
 
             return Response(UpdateCardSerializer(instance).data, status=status.HTTP_200_OK)
 

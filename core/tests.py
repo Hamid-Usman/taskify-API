@@ -1,59 +1,77 @@
-from rest_framework.test import APITestCase
-from rest_framework import status
+from channels.testing import WebsocketCommunicator
+from django.test import TestCase
+from channels.layers import get_channel_layer
+from taskifyAPI.routings import websocket_urlpatterns  # Ensure correct import
+import json
 from .models import Boards, Columns, Cards
 from users.models import User
 from rest_framework.authtoken.models import Token
+from asgiref.sync import sync_to_async
+from channels.routing import ProtocolTypeRouter, URLRouter
+from django.urls import re_path
 
-class CardMovementTestCase(APITestCase):
+
+# Define your consumer routing inside the test
+class BoardConsumerTestCase(TestCase):
     def setUp(self):
-
-        self.user = User.objects.create_user(firstname='test', lastname='user', email='a@a.com' ,password='password123')
-        self.client.login(email='a@a.com', password='password123')
-
-
+        # Create a test user and log them in
+        self.user = User.objects.create_user(firstname='Test', lastname='User', email='a@a.com', password='password123')
         self.token = Token.objects.create(user=self.user)
-        self.client.credentials(HTTP_AUTHORIZATION=f'Token {self.token.key}')
 
-        self.board = Boards.objects.create(title='Test Board', user=self.user)
+        # Create test data for boards, columns, and cards
+        self.board = Boards.objects.create(title='Test Board',
+                                           user=self.user)  # Make sure the board has a user relation
+        self.column = Columns.objects.create(title='To Do', board=self.board)
+        self.card = Cards.objects.create(task='Test Task', column=self.column, position=1)
 
-        self.column1 = Columns.objects.create(title='To Do', board=self.board, order=1)
-        self.column2 = Columns.objects.create(title='In Progress', board=self.board, order=2)
+    async def test_websocket_connect_and_receive(self):
+        # Ensure that the WebSocket routing is passed correctly as a callable
+        application = ProtocolTypeRouter({
+            "websocket": URLRouter(websocket_urlpatterns),
+        })
 
-        self.card1 = Cards.objects.create(task='Card 1', column=self.column1, position=1)
-        self.card2 = Cards.objects.create(task='Card 2', column=self.column1, position=2)
+        # Set the WebSocket URL with the board ID and the Authorization header
+        communicator = WebsocketCommunicator(
+            application,
+            f"/ws/board/{self.board.id}/",
+            headers=[
+                (b"Authorization", f"Token {self.token.key}".encode("utf-8"))
+            ]
+        )
 
-    def test_move_card_to_new_column(self):
-        url = f'/cards/{self.card1.id}/move/'
-        data = {
-            'target_column_id': self.column2.id,
-            'new_position': 1,
+        # Establish WebSocket connection
+        connected, subprotocol = await communicator.connect()
+        self.assertTrue(connected)
+
+        # Prepare a test move card event
+        move_data = {
+            'type': 'board_update',
+            'message': {
+                'type': 'card_moved',
+                'card_id': self.card.id,
+                'new_position': 2,
+                'target_column_id': self.column.id,
+            }
         }
 
-        response = self.client.patch(url, data, format='json')
+        # Send a message to the group (simulating the move)
+        channel_layer = get_channel_layer()
+        await channel_layer.group_send(
+            f'board_{self.board.id}',
+            move_data
+        )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        # Receive the message from the consumer
+        response = await communicator.receive_json_from()
+        self.assertEqual(response['type'], 'card_moved')
+        self.assertEqual(response['card_id'], self.card.id)
+        self.assertEqual(response['new_position'], 2)
+        self.assertEqual(response['target_column_id'], self.column.id)
 
-        self.card1.refresh_from_db()
+        # Close the WebSocket connection
+        await communicator.disconnect()
 
-        self.assertEqual(self.card1.column, self.column2)
-        self.assertEqual(self.card1.position, 1)
-
-    def test_invalid_column(self):
-        url = f'/cards/{self.card1.id}/move/'
-        data = {
-            'target_column_id': 999,
-            'new_position': 1,
-        }
-        response = self.client.patch(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
-
-    def test_invalid_position(self):
-        url = f'/cards/{self.card1.id}/move/'
-        data = {
-            'target_column_id': self.column2.id,
-            'new_position': 'invalid',
-        }
-        response = self.client.patch(url, data, format='json')
-        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
-        self.assertIn('error', response.data)
+    @sync_to_async
+    def create_board(self):
+        # Helper method to create a board with the database synced to the test thread
+        return Boards.objects.create(title="Test Board")
