@@ -51,57 +51,118 @@ class ColumnViewSet(ModelViewSet):
 
 class CardViewSet(ModelViewSet):
     queryset = Cards.objects.all()
+    serializer_class = CardSerializer()
     permission_classes = [IsAuthenticated]
+    
+    def update(self, request, *args, **kwargs):
+        user = request.user
+        instance = self.get_object()
+        if instance.user != user:
+            return Response(
+                {"error": "You do not have permission to update this card."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+            
+        serializer = self.get_serializer(instance, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        self.perform_update(serializer)
+        
+        if instance.priority == "completed":
+            user.points += 1
+            user.save()
+        
+        return Response(serializer.data) 
 
     def get_serializer_class(self):
-        if self.action in ['update', 'partial_update']:
+        if self.action in ["update", "partial_update"]:
             return UpdateCardSerializer
         return CardSerializer
-
-    @action(detail=True, methods=['patch'], url_path='move')
+    
+    '''
+    @action(detail=True, methods=["patch"], url_path="update-priority")
+    def update_priority(self, request, *args, **kwargs):
+        instance = self.get_object()
+        # Example implementation: Update the priority of the card
+        new_priority = request.data.get("priority")
+        if new_priority is None:
+            return Response(
+                {"error": "Priority value is required"}, status=status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            instance.priority = new_priority
+            instance.save()
+            return Response(
+                {"message": "Priority updated successfully"}, status=status.HTTP_200_OK
+            )
+        except Exception as e:
+            return Response(
+                {"error": f"An error occurred: {str(e)}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    '''
+    @action(detail=True, methods=["patch"], url_path="move")
     def move_card(self, request, *args, **kwargs):
         instance = self.get_object()
-        target_column_id = request.data.get('target_column_id')
-        new_position = request.data.get('new_position')
+        target_column_id = request.data.get("target_column_id")
+        new_position = request.data.get("new_position")
+
+        # Debugging payload
+        print("Received payload:", request.data)
+
+        # Validate new_position is an integer
+        try:
+            new_position = int(new_position)
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "Invalid position value"}, status=status.HTTP_400_BAD_REQUEST
+            )
+
+        target_column = get_object_or_404(Columns, id=target_column_id)
+
+        # Ensure new_position is within valid range
+        max_position = target_column.cards.count()
+        if new_position < 0 or new_position > max_position:
+            return Response(
+                {"error": "Invalid position value"}, status=status.HTTP_400_BAD_REQUEST
+            )
 
         try:
-            target_column = get_object_or_404(Columns, id=target_column_id)
-            if not isinstance(new_position, int):
-                return Response({"error": "Couldn't reposition the card"}, status=status.HTTP_400_BAD_REQUEST)
-
             with transaction.atomic():
-                # Update positions in the current column
+                # Shift positions in the current column
                 Cards.objects.filter(
-                    column=instance.column,
-                    position__gt=instance.position,
-                ).update(position=models.F('position') - 1)
+                    column=instance.column, position__gt=instance.position
+                ).update(position=models.F("position") - 1)
 
+                # Shift positions in the target column
                 Cards.objects.filter(
-                    column=target_column,
-                    position__gte=new_position,
-                ).update(position=models.F('position') + 1)
+                    column=target_column, position__gte=new_position
+                ).update(position=models.F("position") + 1)
 
                 # Move the card
                 instance.column = target_column
                 instance.position = new_position
                 instance.save()
 
+                # WebSocket Notification
                 channel_layers = get_channel_layer()
                 board_name = f"Board_{instance.column.board.id}"
-                async_to_sync(channel_layers.group_send) (
+                async_to_sync(channel_layers.group_send)(
                     board_name,
                     {
-                        "type": "Board update",
+                        "type": "board_update",
                         "message": {
-                        "card_id": instance.id,
-                        "New_position": new_position,
-                        "target_column_id": target_column_id
-                        }
-                    }
+                            "card_id": instance.id,
+                            "new_position": new_position,
+                            "target_column_id": target_column_id,
+                        },
+                    },
                 )
 
-
-            return Response(UpdateCardSerializer(instance).data, status=status.HTTP_200_OK)
-
+            return Response(
+                UpdateCardSerializer(instance).data, status=status.HTTP_200_OK
+            )
         except Exception as e:
-            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+            print("Error during card move:", str(e))  # Debugging
+            return Response(
+                {"error": "An error occurred while moving the card"},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )

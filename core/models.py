@@ -20,11 +20,18 @@ class Columns(models.Model):
 
 # Create your models here.
 class Cards(models.Model):
+    STATUS_CHOICES = [
+        ('backlog', 'Backlog'),
+        ('low', 'low'),
+        ('medium', 'Medium'),
+        ('high', 'High')
+    ]
     task = models.CharField(max_length=30)
     position = models.PositiveIntegerField(default=0)
     description = models.TextField(default="", blank=True)
     due_date = models.DateField(default=date.today)
     column = models.ForeignKey(Columns, on_delete=models.CASCADE, related_name="cards")
-
+    priority = models.CharField(max_length=40, choices=STATUS_CHOICES, default="backlog")
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="cards")
     def __str__(self):
         return self.task
