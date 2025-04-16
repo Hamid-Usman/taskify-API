@@ -22,10 +22,10 @@ class BoardSerializer(serializers.ModelSerializer):
 class CardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cards
-        fields = ['id', 'task', 'position', 'description', 'due_date', 'column']
+        fields = ['id', 'task', 'position', 'description', 'due_date', 'column', 'priority']
         read_only_fields = ['id', 'position', 'description', 'due_date']
 
 class UpdateCardSerializer(serializers.ModelSerializer):
     class Meta:
         model = Cards
-        fields = ['id', 'task', 'position', 'description', 'due_date', 'column']
+        fields = ['id', 'task', 'position', 'description', 'due_date', 'column', 'priority']
