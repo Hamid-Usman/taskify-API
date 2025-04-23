@@ -13,3 +13,10 @@ class UserProfileView(viewsets.ViewSet):
     def get_user_profile(self, request):
         serializer = UserSerializer(request.user)
         return Response(serializer.data, status=status.HTTP_200_OK)
+    
+    @action(detail=False, methods=['put', 'patch'], url_path='me')
+    def update_me(self, request):
+        serializer = UserSerializer(request.user, data=request.data, partial=True, context={'request': request})
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
