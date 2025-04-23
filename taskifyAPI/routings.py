@@ -1,6 +1,6 @@
-from django.urls import path
-from taskifyAPI.consumers import BoardConsumer
+from django.urls import re_path
+from .consumers import BoardConsumer
 
 websocket_urlpatterns = [
-    path('ws/board/<int:board_id>/', BoardConsumer.as_asgi()),
+    re_path(r"ws/board/(?P<board_id>\d+)/$", BoardConsumer.as_asgi()),
 ]

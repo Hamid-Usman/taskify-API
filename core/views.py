@@ -42,7 +42,7 @@ class BoardViewSet(ModelViewSet):
 class ColumnViewSet(ModelViewSet):
     queryset = Columns.objects.all()
     serializer_class = ColumnSerializer
-    permission_classes = [IsAuthenticated, IsOwner]
+    #permission_classes = [IsAuthenticated, IsOwner]
 
     @action(detail=True, methods=['get'], url_path='cards')
     def get_cards(self, request, *args, **kwargs):
@@ -54,14 +54,14 @@ class ColumnViewSet(ModelViewSet):
 class CardViewSet(ModelViewSet):
     queryset = Cards.objects.all()
     serializer_class = CardSerializer()
-    permission_classes = [IsAuthenticated, IsOwner]
+    #permission_classes = [IsAuthenticated, IsOwner]
     
     def update(self, request, *args, **kwargs):
         #user = request.user
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
-        self.perform_update(serializer)
+        serializer.save()
         '''
         if instance.priority == "completed":
             user.points += 1
