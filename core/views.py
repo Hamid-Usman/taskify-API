@@ -10,6 +10,7 @@ from rest_framework.permissions import IsAuthenticated
 from .serializers import BoardSerializer, ColumnSerializer, CardSerializer, UpdateCardSerializer
 from asgiref.sync import async_to_sync
 from channels.layers import channel_layers, get_channel_layer
+from datetime import date
 
 
 class BoardViewSet(ModelViewSet):
@@ -53,22 +54,28 @@ class ColumnViewSet(ModelViewSet):
 
 class CardViewSet(ModelViewSet):
     queryset = Cards.objects.all()
-    serializer_class = CardSerializer()
+    serializer_class = CardSerializer
     #permission_classes = [IsAuthenticated, IsOwner]
     
     def update(self, request, *args, **kwargs):
-        #user = request.user
+        user = request.user
         instance = self.get_object()
+        previous_instance = instance.priority
         serializer = self.get_serializer(instance, data=request.data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
-        '''
-        if instance.priority == "completed":
-            user.points += 1
+        
+        if previous_instance != "Completed" and instance.priority == "Completed":
+            user.points += 3
             user.save()
-        '''
+        
+        if date.today() > instance.due_date:
+            # Check if the due date has passed
+            user.points -= 5
+            user.save()
+            
         return Response(serializer.data) 
-
+    
     def get_serializer_class(self):
         if self.action in ["update", "partial_update"]:
             return UpdateCardSerializer

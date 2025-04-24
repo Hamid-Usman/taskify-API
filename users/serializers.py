@@ -9,5 +9,5 @@ class UserCreateSerializer(UserCreateSerializer):
 class UserSerializer(ModelSerializer):
     class Meta:
         model = User
-        fields = ('id', 'firstname', 'lastname', 'email')
+        fields = ('id', 'firstname', 'lastname', 'email', 'points')
     
