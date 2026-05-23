@@ -10,7 +10,7 @@ class HeliosMetricsMiddleware:
         self.api_key = 'dw_0e744e8ea7dd0d2b121be71997600971efa9a1b534f02891'
         self.helios_url =  'https://deploywatchapi.onrender.com'
 
-    def __call__(self, request):B
+    def __call__(self, request):
         # 1. Start high-precision timer
         start_time = time.perf_counter()
 
