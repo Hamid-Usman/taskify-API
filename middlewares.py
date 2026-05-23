@@ -8,7 +8,7 @@ class HeliosMetricsMiddleware:
         self.get_response = get_response
         # Retrieve Helios configurations from Django settings
         self.api_key = 'dw_0e744e8ea7dd0d2b121be71997600971efa9a1b534f02891'
-        self.helios_url =  'https://deploywatchapi.onrender.com'
+        self.helios_url = 'https://deploywatchapi.onrender.com/api'
 
     def __call__(self, request):
         # 1. Start high-precision timer
