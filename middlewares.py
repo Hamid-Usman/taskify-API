@@ -18,7 +18,7 @@ class HeliosMetricsMiddleware:
     def __init__(self, get_response):
         self.get_response = get_response
         # Allow overriding via settings; fall back to the embedded key/URL
-        self.api_key = getattr(settings, 'HELIOS_API_KEY', 'dw_314ec0c492d6b9a6a9920af845548d229b04fa94636af81a')
+        self.api_key = getattr(settings, 'HELIOS_API_KEY', 'dw_ec78830b1b41449dc4a04e1b326729e7a73b4cd41ee04224')
         self.helios_url = getattr(settings, 'HELIOS_URL', 'https://deploywatchapi.onrender.com/api')
 
     def __call__(self, request):
